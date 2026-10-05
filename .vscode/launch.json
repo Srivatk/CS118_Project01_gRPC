@@ -19,7 +19,11 @@
             "mode": "debug",
             "program": "${workspaceFolder}/cmd/server"
         }
-
-
-    ]
+    ],
+     "compounds": [
+    {
+      "name": "Server + Client",
+      "configurations": ["whatsup Server Package", "whatsup Client Package"]
+    }
+  ]
 }

@@ -1,2 +1,4 @@
 pkg/whatsup.pb.go
 pkg/whatsup_grpc.pb.go
+cmd/client/__debug_bin.exe
+cmd/server/__debug_bin.exe
