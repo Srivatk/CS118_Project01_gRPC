@@ -36,8 +36,16 @@ func (e *DisconnectError) Error() string {
 
    If any errors occur, return any error message you'd like.
 */
-func Register(client WhatsUpClient, user string) (context.Context, error) {
-
+func Register(client WhatsUpClient, user string) (context.Context, error) { 
+    
+    reg := Registration{SourceUser: user};
+    ctx := context.Background();
+    authToken, errMessage := client.Connect(ctx, &reg);
+    if(errMessage != nil) {
+        ctx = metadata.AppendToOutgoingContext(ctx, "token", authToken.String());
+        ctx = metadata.AppendToOutgoingContext(ctx, "user", user);
+    }
+    return ctx, errors.New(fmt.Sprintf("Error Connecting Client: %s\n", errMessage));;
 }
 
 // A helper function that returns an active client connection to the
@@ -70,6 +78,13 @@ func ClientSetup(address string, user string, timeout int) (*grpc.ClientConn, Wh
 
     return connection, client, ctx, nil
 
+}
+
+func Fetch(ctx context.Context, user string) (string, error) { 
+    
+    //TODO More
+
+    return "", errors.New("To be implemented\n")
 }
 
 // A helper function that carries out the actions indicated by the arguments.

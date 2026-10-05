@@ -92,6 +92,41 @@ func (s Server) Connect(_ context.Context, r *Registration) (*AuthToken, error) 
 // (when you initially receive it, it will have the name of the recipient instead).
 // TODO: Implement `Send`. If any errors occur, return any error message you'd like.
 func (s Server) Send(ctx context.Context, msg *ChatMessage) (*Success, error) {
+
+	toUser := msg.GetUser();
+	token := hash(toUser);
+
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		return nil, errors.New("Couldn't read metadata for request")
+	}
+
+	// if token is present in metadata
+	var fromUser string;
+	if values, ok := md["user"]; ok {
+		if len(values) == 1 {
+			fromUser = values[0];
+		}
+	} else {
+		return &Success{
+			Ok : false,
+		}, errors.New("Sending User is not known")
+	}
+
+	if _, ok := s.AuthToUserTable[token]; ok {
+		localMsg := new(ChatMessage);
+		{
+			localMsg.User =  fromUser;
+			localMsg.Body =  msg.GetBody();
+		};
+		s.Inboxes[toUser] <- localMsg;
+		return &Success{
+			Ok : true,
+		}, nil
+	}
+	return &Success{
+			Ok : false,
+		}, errors.New("User is not registered")
 }
 
 // Implementation of the Fetch method defined in our `.proto` file.
@@ -102,6 +137,27 @@ func (s Server) Send(ctx context.Context, msg *ChatMessage) (*Success, error) {
 //
 // TODO: Implement Fetch. If any errors occur, return any error message you'd like.
 func (s Server) Fetch(ctx context.Context, _ *Empty) (*ChatMessages, error) {
+
+	md, _ := metadata.FromIncomingContext(ctx);
+	values, ok := md["token"]; 
+	if  ok {
+		if len(values) == 1 {
+			// if user is present in s.AuthToUserTable
+			if user,ok := s.AuthToUserTable[values[0]]; ok {
+				allChatMessages := s.Inboxes[user];
+				var result ChatMessages;
+				for msg:= range allChatMessages {
+					result.Messages = append(result.Messages, msg);
+				}
+				return &result, nil;
+			}
+		} else {
+			return nil, errors.New(fmt.Sprintf("Invalid Token - %s\n", values[0]))
+		}
+	} else {
+		return nil, errors.New(fmt.Sprintf("Invalid Token - %s\n", values[0]))
+	}
+	return nil, errors.New(fmt.Sprintf("Invalid Token - %s\n", values[0]))
 }
 
 // Implementation of the List method defined in our `.proto` file.
