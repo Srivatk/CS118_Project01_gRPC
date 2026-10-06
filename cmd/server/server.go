@@ -7,9 +7,14 @@ import (
     whatsup "whatsup/pkg"
 )
 
+const (
+	DEFAULT_SERVER_PORT        string = "50001"
+)
+
+
 func main() {
 
-    serverPortPtr := flag.String("port", "", "chat server port to connect to")
+    serverPortPtr := flag.String("port", DEFAULT_SERVER_PORT, "chat server port to connect to")
     flag.Parse()
 
     listen, port, err := whatsup.OpenListener(*serverPortPtr)

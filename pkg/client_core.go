@@ -5,7 +5,6 @@ package whatsup
 
 import (
     "context"
-    "errors"
     "fmt"
     "google.golang.org/grpc"
     "google.golang.org/grpc/metadata"
@@ -41,11 +40,13 @@ func Register(client WhatsUpClient, user string) (context.Context, error) {
     reg := Registration{SourceUser: user};
     ctx := context.Background();
     authToken, errMessage := client.Connect(ctx, &reg);
-    if(errMessage != nil) {
-        ctx = metadata.AppendToOutgoingContext(ctx, "token", authToken.String());
+    if(errMessage == nil) {
+        ctx = metadata.AppendToOutgoingContext(ctx, "token", authToken.GetToken());
         ctx = metadata.AppendToOutgoingContext(ctx, "user", user);
+        return ctx, nil;;
+    } else {
+        return ctx, fmt.Errorf("Error Connecting Client: %s\n", errMessage);
     }
-    return ctx, errors.New(fmt.Sprintf("Error Connecting Client: %s\n", errMessage));;
 }
 
 // A helper function that returns an active client connection to the
@@ -65,7 +66,7 @@ func ClientSetup(address string, user string, timeout int) (*grpc.ClientConn, Wh
         grpc.WithTimeout(timeoutInSeconds),
     )
     if err != nil {
-        return &grpc.ClientConn{}, nil, nil, errors.New(fmt.Sprintf("unable to connect to server: %s\n", err))
+        return &grpc.ClientConn{}, nil, nil, fmt.Errorf("unable to connect to server: %s\n", err)
     }
 
     client := NewWhatsUpClient(connection)
@@ -73,10 +74,14 @@ func ClientSetup(address string, user string, timeout int) (*grpc.ClientConn, Wh
     // register our client as a new user
     ctx, err := Register(client, user)
     if err != nil {
-        return &grpc.ClientConn{}, nil, nil, errors.New(fmt.Sprintf("unable to register with server: %s\n", err))
+        return &grpc.ClientConn{}, nil, nil, fmt.Errorf("unable to register with server: %s\n", err)
     }
 
     return connection, client, ctx, nil
+
+}
+/*
+func List(ctx context.Context)(UserList) {
 
 }
 
@@ -86,6 +91,7 @@ func Fetch(ctx context.Context, user string) (string, error) {
 
     return "", errors.New("To be implemented\n")
 }
+    */
 
 // A helper function that carries out the actions indicated by the arguments.
 // Arguments can either be a one-element slice or a two-element slice of strings.
@@ -119,6 +125,19 @@ func Execute(client WhatsUpClient, ctx context.Context, arguments ...string) (st
             // the RPC, ending with a newline character "\n", to the console.
             // The order of the users printed does not matter.
 
+            allUsers, err := client.List(ctx, &Empty{});
+             if err != nil {
+                return "", err
+            }
+
+            all := []string{}
+            for _, user := range allUsers.Users {
+                all = append(all, fmt.Sprintf("%s, ", user))
+            }
+
+            return fmt.Sprintf("%s\n", strings.Join(all, "\n")), nil
+
+
         case "quit":
 
             success, err := client.Disconnect(ctx, &Empty{})
@@ -136,7 +155,7 @@ func Execute(client WhatsUpClient, ctx context.Context, arguments ...string) (st
         })
 
         if err != nil || !success.Ok {
-            return "", errors.New(fmt.Sprintf("Failed to send - errors, if any: %s", err))
+            return "", fmt.Errorf("Failed to send - errors, if any: %s", err)
         }
     }
 

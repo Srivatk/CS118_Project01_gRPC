@@ -55,8 +55,9 @@ func (s Server) Interceptor(ctx context.Context, req interface{}, info *grpc.Una
 	if values, ok := md["token"]; ok {
 		if len(values) == 1 {
 			// if user is present in s.AuthToUserTable
-			if user, ok := s.AuthToUserTable[values[0]]; ok {
-				return handler(context.WithValue(context.Background(), "username", user), req)
+			if _, ok := s.AuthToUserTable[values[0]]; ok {
+				//return handler(context.WithValue(context.Background(), "username", user), req)
+				return handler(ctx, req)
 			}
 		}
 	}
@@ -75,8 +76,9 @@ func (s Server) Connect(_ context.Context, r *Registration) (*AuthToken, error) 
 
 	if _, ok := s.AuthToUserTable[token]; !ok {
 		s.AuthToUserTable[token] = r.SourceUser
-		s.Inboxes[r.SourceUser] = make(chan *ChatMessage, MAILBOX_SIZE)
-
+		if _, ok := s.Inboxes[r.SourceUser]; !ok {
+			s.Inboxes[r.SourceUser] = make(chan *ChatMessage, MAILBOX_SIZE)
+		}
 		return &AuthToken{
 			Token: token,
 		}, nil
@@ -120,6 +122,7 @@ func (s Server) Send(ctx context.Context, msg *ChatMessage) (*Success, error) {
 			localMsg.Body =  msg.GetBody();
 		};
 		s.Inboxes[toUser] <- localMsg;
+		close(s.Inboxes[toUser]);
 		return &Success{
 			Ok : true,
 		}, nil
@@ -138,6 +141,9 @@ func (s Server) Send(ctx context.Context, msg *ChatMessage) (*Success, error) {
 // TODO: Implement Fetch. If any errors occur, return any error message you'd like.
 func (s Server) Fetch(ctx context.Context, _ *Empty) (*ChatMessages, error) {
 
+	
+	result := ChatMessages{Messages: make([]*ChatMessage, 0)};
+	
 	md, _ := metadata.FromIncomingContext(ctx);
 	values, ok := md["token"]; 
 	if  ok {
@@ -145,19 +151,21 @@ func (s Server) Fetch(ctx context.Context, _ *Empty) (*ChatMessages, error) {
 			// if user is present in s.AuthToUserTable
 			if user,ok := s.AuthToUserTable[values[0]]; ok {
 				allChatMessages := s.Inboxes[user];
-				var result ChatMessages;
-				for msg:= range allChatMessages {
-					result.Messages = append(result.Messages, msg);
+				
+				for msg := range allChatMessages {
+					fmt.Printf("Fetch: %s, %s\n", msg.GetUser(), msg.GetBody());
+					fmt.Printf("Length = %d\n", len(allChatMessages));
+					result.Messages = append(result.Messages, &ChatMessage{User:msg.GetUser(), Body:msg.GetBody()});
 				}
 				return &result, nil;
 			}
 		} else {
-			return nil, errors.New(fmt.Sprintf("Invalid Token - %s\n", values[0]))
+			return nil, fmt.Errorf("Invalid Token - %s\n", values[0])
 		}
 	} else {
-		return nil, errors.New(fmt.Sprintf("Invalid Token - %s\n", values[0]))
+		return nil, fmt.Errorf("Invalid Token - %s\n", values[0])
 	}
-	return nil, errors.New(fmt.Sprintf("Invalid Token - %s\n", values[0]))
+	return nil, fmt.Errorf("Invalid Token - %s\n", values[0])
 }
 
 // Implementation of the List method defined in our `.proto` file.
@@ -180,15 +188,23 @@ func (s Server) List(ctx context.Context, _ *Empty) (*UserList, error) {
 // Should destroy the corresponding inbox and entry in `s.AuthToUserTable`
 func (s Server) Disconnect(ctx context.Context, _ *Empty) (*Success, error) {
 
-	user := fmt.Sprintf("%v", ctx.Value("username"))
-	close(s.Inboxes[user]) // make sure no more writes can be sent on this channel
-	delete(s.Inboxes, user)
+	md, _ := metadata.FromIncomingContext(ctx);
+	values, ok := md["token"]; 
+	if  ok {
+		if len(values) == 1 {
+			// if user is present in s.AuthToUserTable
+			if user,ok := s.AuthToUserTable[values[0]]; ok {
+				close(s.Inboxes[user]) // make sure no more writes can be sent on this channel
+				delete(s.Inboxes, user)
 
-	for token, u := range s.AuthToUserTable {
-		if u == user {
-			delete(s.AuthToUserTable, token)
+				for token, u := range s.AuthToUserTable {
+					if u == user {
+						delete(s.AuthToUserTable, token)
+					}
+				}
+				return &Success{Ok: true}, nil
+			}
 		}
 	}
-
-	return &Success{Ok: true}, nil
+	return &Success{Ok: false}, fmt.Errorf("Error during disconnection")
 }

@@ -10,10 +10,10 @@ import (
 )
 
 const (
-	DEFAULT_SERVER_ADDR        string = "localhost"
-	DEFAULT_SERVER_PORT        string = "12345"
+	DEFAULT_SERVER_ADDR        string = "127.0.0.1"
+	DEFAULT_SERVER_PORT        string = "50001"
 	DEFAULT_USERNAME           string = "jeffra"
-	DEFAULT_TIMEOUT_IN_SECONDS int    = 3
+	DEFAULT_TIMEOUT_IN_SECONDS int    = 30
 )
 
 func main() {
@@ -54,7 +54,7 @@ func start(user string, serverPort string, serverAddr string) {
 	fmt.Println("\t <user> <message...> - Send <message> to <user>")
 
 	for {
-		fmt.Printf(fmt.Sprintf("%s@ ", user))
+		fmt.Printf("%s: ", user)
 		reader := bufio.NewReader(os.Stdin)
 		line, _ := reader.ReadString('\n')
 		line = strings.TrimSpace(line)
