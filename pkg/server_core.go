@@ -122,7 +122,6 @@ func (s Server) Send(ctx context.Context, msg *ChatMessage) (*Success, error) {
 			localMsg.Body =  msg.GetBody();
 		};
 		s.Inboxes[toUser] <- localMsg;
-		close(s.Inboxes[toUser]);
 		return &Success{
 			Ok : true,
 		}, nil
@@ -143,28 +142,37 @@ func (s Server) Fetch(ctx context.Context, _ *Empty) (*ChatMessages, error) {
 
 	
 	result := ChatMessages{Messages: make([]*ChatMessage, 0)};
-	
 	md, _ := metadata.FromIncomingContext(ctx);
 	values, ok := md["token"]; 
 	if  ok {
 		if len(values) == 1 {
 			// if user is present in s.AuthToUserTable
 			if user,ok := s.AuthToUserTable[values[0]]; ok {
-				allChatMessages := s.Inboxes[user];
-				
-				for msg := range allChatMessages {
-					fmt.Printf("Fetch: %s, %s\n", msg.GetUser(), msg.GetBody());
-					fmt.Printf("Length = %d\n", len(allChatMessages));
-					result.Messages = append(result.Messages, &ChatMessage{User:msg.GetUser(), Body:msg.GetBody()});
+				allChatMessagesForThisUser := s.Inboxes[user];
+
+			READLOOP: for range BATCH_SIZE {
+					select {
+					case msg, ok := <- allChatMessagesForThisUser:
+						if ok {
+							result.Messages = append(result.Messages, msg);
+							fmt.Println("Received:", msg)
+							
+						} else {
+							// Channel is closed and empty
+							fmt.Println("Channel is empty now.")
+							break READLOOP
+						}
+						
+					default:
+						// Channel is currently empty, break out of the loop
+						fmt.Println("Channel is empty now.")
+						break READLOOP
+					}
 				}
 				return &result, nil;
 			}
-		} else {
-			return nil, fmt.Errorf("Invalid Token - %s\n", values[0])
-		}
-	} else {
-		return nil, fmt.Errorf("Invalid Token - %s\n", values[0])
-	}
+		} 
+	} 
 	return nil, fmt.Errorf("Invalid Token - %s\n", values[0])
 }
 
