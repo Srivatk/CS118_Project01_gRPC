@@ -132,10 +132,10 @@ func Execute(client WhatsUpClient, ctx context.Context, arguments ...string) (st
 
             all := []string{}
             for _, user := range allUsers.Users {
-                all = append(all, fmt.Sprintf("%s, ", user))
+                all = append(all, user)
             }
 
-            return fmt.Sprintf("%s\n", strings.Join(all, "\n")), nil
+            return fmt.Sprintf("%s\n", strings.Join(all, ",")), nil
 
 
         case "quit":
